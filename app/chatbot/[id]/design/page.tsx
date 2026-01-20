@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useChatbot } from "../chatbot-context";
 import { DesignPanel } from "@/components/ui/design-panel";
 import { ChatbotPreview } from "@/components/ui/chatbot-preview";
@@ -7,6 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DesignPage() {
   const { chatbot, updateChatbot, loading } = useChatbot();
+  const [previewMode, setPreviewMode] = useState<
+    "desktop" | "tablet" | "mobile"
+  >("desktop");
 
   if (loading || !chatbot) {
     return (
@@ -18,8 +22,11 @@ export default function DesignPage() {
     );
   }
 
-  // Dummy functions for props that are not used on this page
-  const handlePreview = () => {};
+  // Open preview in new window
+  const handlePreview = () => {
+    const previewUrl = `/embed/${chatbot.id}`;
+    window.open(previewUrl, "chatbot-preview", "width=400,height=600");
+  };
   const handleVoicePreview = async () => {};
 
   return (
@@ -30,6 +37,7 @@ export default function DesignPage() {
           config={chatbot}
           onChange={(updatedConfig) => updateChatbot(updatedConfig)}
           onPreview={handlePreview}
+          onPreviewModeChange={setPreviewMode}
           voiceEnabled={chatbot.voice_enabled}
           availableVoices={[]} // Pass empty or fetch if needed
           onVoicePreview={handleVoicePreview}
@@ -47,6 +55,7 @@ export default function DesignPage() {
               chatbotId={chatbot.id}
               config={chatbot}
               className="w-full h-full"
+              previewMode={previewMode}
             />
           </div>
         </div>

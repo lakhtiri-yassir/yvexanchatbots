@@ -7,19 +7,21 @@ interface ChatbotPreviewProps {
   chatbotId: string;
   config: any;
   className?: string;
+  previewMode?: "desktop" | "tablet" | "mobile";
 }
 
 export function ChatbotPreview({
   chatbotId,
   config,
   className,
+  previewMode = "desktop",
 }: ChatbotPreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (iframeRef.current) {
       // Generate preview HTML with current config
-      const previewHTML = generatePreviewHTML(chatbotId, config);
+      const previewHTML = generatePreviewHTML(chatbotId, config, previewMode);
       const blob = new Blob([previewHTML], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       iframeRef.current.src = url;
@@ -28,7 +30,7 @@ export function ChatbotPreview({
         URL.revokeObjectURL(url);
       };
     }
-  }, [chatbotId, config]);
+  }, [chatbotId, config, previewMode]);
 
   const getShadowCSS = (shadow: string) => {
     switch (shadow) {
@@ -117,7 +119,26 @@ export function ChatbotPreview({
     return styles[style] || styles.modern;
   };
 
-  const generatePreviewHTML = (chatbotId: string, config: any) => {
+  const generatePreviewHTML = (
+    chatbotId: string,
+    config: any,
+    previewMode: string = "desktop"
+  ) => {
+    // Set container dimensions based on preview mode
+    let containerWidth = "100%";
+    let containerHeight = "100%";
+    let containerMargin = "0";
+
+    if (previewMode === "mobile") {
+      containerWidth = "375px";
+      containerHeight = "667px";
+      containerMargin = "0 auto";
+    } else if (previewMode === "tablet") {
+      containerWidth = "768px";
+      containerHeight = "1024px";
+      containerMargin = "0 auto";
+    }
+
     const headerConfig = config.header_config || {};
     const bubbleConfig = config.bubble_config || {};
     const inputConfig = config.input_config || {};
@@ -173,10 +194,11 @@ export function ChatbotPreview({
       margin: 0;
       padding: 0;
       font-family: ${fontFamily};
-      background: #fff;
-      height: 100vh;
+      background: #f5f5f5;
+      min-height: 100vh;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
 
     ${animationKeyframes}
@@ -184,9 +206,13 @@ export function ChatbotPreview({
     .chatbot-container {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      width: ${containerWidth};
+      height: ${containerHeight};
+      margin: ${containerMargin};
       background: ${colorScheme.background || "#ffffff"};
       border: 1px solid ${colorScheme.inputBorder || "#e5e7eb"};
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     ${

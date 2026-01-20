@@ -162,6 +162,7 @@ interface DesignPanelProps {
   config: DesignConfig;
   onChange: (config: DesignConfig) => void;
   onPreview: () => void;
+  onPreviewModeChange?: (mode: "desktop" | "tablet" | "mobile") => void;
   voiceEnabled: boolean;
   availableVoices: Array<{ voice_id: string; name: string; category: string }>;
   onVoicePreview: (voiceId: string, text: string) => void;
@@ -204,6 +205,7 @@ export function DesignPanel({
   config,
   onChange,
   onPreview,
+  onPreviewModeChange,
   voiceEnabled,
   availableVoices,
   onVoicePreview,
@@ -273,7 +275,10 @@ export function DesignPanel({
             <Button
               variant={previewMode === "desktop" ? "default" : "outline"}
               size="sm"
-              onClick={() => setPreviewMode("desktop")}
+              onClick={() => {
+                setPreviewMode("desktop");
+                onPreviewModeChange?.("desktop");
+              }}
             >
               <Monitor className="h-4 w-4 mr-2" />
               Desktop
@@ -281,7 +286,10 @@ export function DesignPanel({
             <Button
               variant={previewMode === "tablet" ? "default" : "outline"}
               size="sm"
-              onClick={() => setPreviewMode("tablet")}
+              onClick={() => {
+                setPreviewMode("tablet");
+                onPreviewModeChange?.("tablet");
+              }}
             >
               <Layout className="h-4 w-4 mr-2" />
               Tablet
@@ -289,7 +297,10 @@ export function DesignPanel({
             <Button
               variant={previewMode === "mobile" ? "default" : "outline"}
               size="sm"
-              onClick={() => setPreviewMode("mobile")}
+              onClick={() => {
+                setPreviewMode("mobile");
+                onPreviewModeChange?.("mobile");
+              }}
             >
               <Smartphone className="h-4 w-4 mr-2" />
               Mobile
