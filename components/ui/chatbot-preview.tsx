@@ -74,6 +74,7 @@ export function ChatbotPreview({
       display: flex;
       flex-direction: column;
       gap: 12px;
+      justify-content: flex-start;
     }
     
     .message {
@@ -84,10 +85,12 @@ export function ChatbotPreview({
     
     .message.bot {
       align-self: flex-start;
+      width: 100%;
     }
     
     .message.user {
       align-self: flex-end;
+      width: 100%;
     }
     
     .message-bubble {
@@ -96,6 +99,8 @@ export function ChatbotPreview({
       word-wrap: break-word;
       font-size: 14px;
       line-height: 1.4;
+      max-width: 85%;
+      width: fit-content;
     }
     
     .message.bot .message-bubble {
