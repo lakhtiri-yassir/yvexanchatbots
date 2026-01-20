@@ -45,6 +45,9 @@ export const supabase = {
   get auth() {
     return getSupabase().auth;
   },
+  get storage() {
+    return getSupabase().storage;
+  },
   from(table: string) {
     return getSupabase().from(table);
   },
