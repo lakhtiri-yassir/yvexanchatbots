@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getSupabase } from "@/lib/supabase";
 
 interface Message {
   id: string;
@@ -10,9 +11,24 @@ interface Message {
   timestamp: Date;
 }
 
+interface ChatbotConfig {
+  name: string;
+  starting_phrase: string;
+  owner_name: string;
+  bot_avatar_url?: string;
+  color_scheme?: any;
+  typography?: any;
+  header_config?: any;
+  bubble_config?: any;
+  input_config?: any;
+  footer_config?: any;
+  animation_config?: any;
+}
+
 export default function ChatbotEmbedPage() {
   const searchParams = useSearchParams();
   const chatbotId = searchParams.get("id");
+  const [config, setConfig] = useState<ChatbotConfig | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,17 +42,34 @@ export default function ChatbotEmbedPage() {
     scrollToBottom();
   }, [messages]);
 
+  // Load chatbot config
   useEffect(() => {
-    // Load initial message
-    setMessages([
-      {
-        id: "1",
-        role: "bot",
-        content: "Hi there! How can I help you today?",
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+    const loadChatbot = async () => {
+      if (!chatbotId) return;
+
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from("chatbots")
+        .select("*")
+        .eq("id", chatbotId)
+        .single();
+
+      if (data && !error) {
+        setConfig(data);
+        setMessages([
+          {
+            id: "1",
+            role: "bot",
+            content:
+              data.starting_phrase || "Hi there! How can I help you today?",
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    };
+
+    loadChatbot();
+  }, [chatbotId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,15 +102,33 @@ export default function ChatbotEmbedPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div
+      className="flex flex-col h-screen"
+      style={{ backgroundColor: config?.color_scheme?.background || "#f0f0f0" }}
+    >
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-4 shadow-md">
-        <h1 className="font-semibold text-lg">Support Assistant</h1>
-        <p className="text-sm opacity-90">Online • Usually replies instantly</p>
+      <div
+        className="text-white px-4 py-4 shadow-md flex justify-between items-center"
+        style={{ backgroundColor: config?.color_scheme?.header || "#0f172a" }}
+      >
+        <div>
+          <h1
+            className="font-semibold text-lg"
+            style={{ fontSize: config?.typography?.headerSize || "18px" }}
+          >
+            {config?.name || "Support Assistant"}
+          </h1>
+          <p className="text-sm opacity-90">
+            Online • Usually replies instantly
+          </p>
+        </div>
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+        style={{ gap: config?.bubble_config?.spacing || "8px" }}
+      >
         {messages.map((message) => (
           <div
             key={message.id}
@@ -86,29 +137,57 @@ export default function ChatbotEmbedPage() {
             }`}
           >
             <div
-              className={`max-w-xs px-4 py-2 rounded-lg ${
-                message.role === "user"
-                  ? "bg-blue-600 text-white rounded-br-none"
-                  : "bg-gray-200 text-gray-900 rounded-bl-none"
-              }`}
+              className={`max-w-xs px-4 py-2 rounded-lg`}
+              style={{
+                backgroundColor:
+                  message.role === "user"
+                    ? config?.color_scheme?.userMessage || "#3b82f6"
+                    : config?.color_scheme?.botMessage || "#f3f4f6",
+                color:
+                  message.role === "user"
+                    ? config?.color_scheme?.buttonText || "#ffffff"
+                    : config?.color_scheme?.textPrimary || "#1f2937",
+                borderRadius: config?.bubble_config?.borderRadius || "18px",
+                animation: config?.animation_config?.messageAnimation
+                  ? `${config.animation_config.messageAnimation}In ${
+                      config.animation_config.transitionDuration || "300ms"
+                    } ease-out`
+                  : "none",
+                fontSize: config?.typography?.messageSize || "14px",
+                fontFamily:
+                  config?.typography?.fontFamily || "Inter, sans-serif",
+                fontWeight: config?.typography?.messageWeight || "400",
+              }}
             >
               <p className="text-sm">{message.content}</p>
-              <p
-                className={`text-xs mt-1 ${
-                  message.role === "user" ? "text-blue-100" : "text-gray-500"
-                }`}
-              >
-                {message.timestamp.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
+              {config?.bubble_config?.showTimestamp && (
+                <p
+                  className={`text-xs mt-1`}
+                  style={{
+                    color:
+                      message.role === "user"
+                        ? "rgba(255,255,255,0.7)"
+                        : config?.color_scheme?.textSecondary || "#9ca3af",
+                  }}
+                >
+                  {message.timestamp.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              )}
             </div>
           </div>
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-gray-200 text-gray-900 px-4 py-2 rounded-lg rounded-bl-none">
+            <div
+              className="px-4 py-2 rounded-lg"
+              style={{
+                backgroundColor: config?.color_scheme?.botMessage || "#f3f4f6",
+                borderRadius: config?.bubble_config?.borderRadius || "18px",
+              }}
+            >
               <div className="flex space-x-2">
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>

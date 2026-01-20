@@ -171,7 +171,10 @@ export default function PreviewPage() {
     return (
       <div className="w-full h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center p-8">
         {/* Tablet Frame */}
-        <div className="w-768 h-1024 bg-black rounded-3xl shadow-2xl border-8 border-gray-800 overflow-hidden flex flex-col">
+        <div
+          style={{ width: "768px", height: "1024px" }}
+          className="bg-black rounded-3xl shadow-2xl border-8 border-gray-800 overflow-hidden flex flex-col"
+        >
           {/* Status Bar */}
           <div className="bg-black text-white px-6 py-2 text-center text-sm font-semibold">
             9:41 ●●●●●●●●●● 100%
@@ -179,7 +182,6 @@ export default function PreviewPage() {
 
           {/* Screen Content */}
           <iframe
-            ref={iframeRef}
             title="Chatbot Preview - Tablet"
             className="flex-1 border-0"
             sandbox="allow-same-origin allow-scripts allow-forms"
@@ -194,7 +196,10 @@ export default function PreviewPage() {
     return (
       <div className="w-full h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center p-8">
         {/* Mobile Frame */}
-        <div className="w-375 h-667 bg-black rounded-3xl shadow-2xl border-8 border-gray-800 overflow-hidden flex flex-col relative">
+        <div
+          style={{ width: "375px", height: "667px" }}
+          className="bg-black rounded-3xl shadow-2xl border-8 border-gray-800 overflow-hidden flex flex-col relative"
+        >
           {/* Notch */}
           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-40 h-7 bg-black rounded-b-3xl z-20"></div>
 
@@ -205,7 +210,6 @@ export default function PreviewPage() {
 
           {/* Screen Content */}
           <iframe
-            ref={iframeRef}
             title="Chatbot Preview - Mobile"
             className="flex-1 border-0"
             sandbox="allow-same-origin allow-scripts allow-forms"
