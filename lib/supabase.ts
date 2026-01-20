@@ -5,9 +5,20 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// DEBUG: Log what's available
+console.log("DEBUG Supabase Config:", {
+  url: supabaseUrl ? "SET" : "MISSING",
+  key: supabaseAnonKey ? "SET" : "MISSING",
+  serviceKey: supabaseServiceKey ? "SET" : "MISSING",
+  allEnv: Object.keys(process.env).filter((k) => k.includes("SUPABASE")),
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    "Missing required Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your Netlify environment variables."
+    "Missing required Supabase environment variables. URL: " +
+      (supabaseUrl ? "OK" : "MISSING") +
+      ", Key: " +
+      (supabaseAnonKey ? "OK" : "MISSING")
   );
 }
 
