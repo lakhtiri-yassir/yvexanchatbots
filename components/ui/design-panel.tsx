@@ -1703,21 +1703,6 @@ export function DesignPanel({
             </CardContent>
           </Card>
         </TabsContent>
-        {/* Voice Tab - Now in dedicated Voice page */}
-        <TabsContent value="voice" className="space-y-4">
-          <Card>
-            <CardContent className="text-center py-8">
-              <Mic className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Voice Configuration Moved
-              </h3>
-              <p className="text-gray-600">
-                Voice configuration settings have been moved to the dedicated
-                Voice section in the sidebar for better organization.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* Advanced Tab */}
         <TabsContent value="advanced" className="space-y-4">
