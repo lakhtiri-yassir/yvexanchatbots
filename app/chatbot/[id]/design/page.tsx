@@ -23,9 +23,9 @@ export default function DesignPage() {
   const handleVoicePreview = async () => {};
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-screen">
       {/* Design Panel - Left Side */}
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 overflow-y-auto">
         <DesignPanel
           config={chatbot}
           onChange={(updatedConfig) => updateChatbot(updatedConfig)}
@@ -37,13 +37,15 @@ export default function DesignPage() {
       </div>
 
       {/* Live Preview - Right Side */}
-      <div className="lg:col-span-2">
-        <div className="sticky top-20">
-          <h3 className="text-lg font-semibold mb-4">Live Preview</h3>
+      <div className="lg:col-span-2 flex flex-col">
+        <div className="sticky top-0 z-10 pt-4 pb-2 bg-white">
+          <h3 className="text-lg font-semibold">Live Preview</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto">
           <ChatbotPreview
             chatbotId={chatbot.id}
             config={chatbot}
-            className="w-full h-96 lg:h-auto"
+            className="w-full h-full min-h-96"
           />
         </div>
       </div>

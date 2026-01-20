@@ -66,12 +66,12 @@ export default function ChatbotEditorLayout({
   return (
     <ChatbotProvider chatbotId={chatbotId}>
       <EditorHeader />
-      <div className="container mx-auto my-8">
-        <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-8 lg:space-y-0">
-          <aside className="lg:w-48 flex-shrink-0">
+      <div className="flex-1 overflow-hidden">
+        <div className="flex flex-col h-screen lg:flex-row lg:space-x-6">
+          <aside className="lg:w-48 flex-shrink-0 border-r border-gray-200 overflow-y-auto">
             <SidebarNav items={sidebarNavItems} />
           </aside>
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 overflow-hidden">{children}</div>
         </div>
       </div>
     </ChatbotProvider>
