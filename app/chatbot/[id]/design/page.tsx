@@ -22,10 +22,16 @@ export default function DesignPage() {
     );
   }
 
-  // Open preview in new window
+  // Open preview in new window with the selected mode
   const handlePreview = () => {
-    const previewUrl = `/embed/${chatbot.id}`;
-    window.open(previewUrl, "chatbot-preview", "width=400,height=600");
+    const modeParams = {
+      desktop: "width=1400,height=900",
+      tablet: "width=800,height=1100",
+      mobile: "width=420,height=750",
+    };
+
+    const previewUrl = `/preview/${chatbot.id}?mode=${previewMode}`;
+    window.open(previewUrl, "chatbot-preview", modeParams[previewMode]);
   };
   const handleVoicePreview = async () => {};
 
