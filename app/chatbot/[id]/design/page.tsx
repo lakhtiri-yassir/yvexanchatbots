@@ -38,13 +38,17 @@ export default function DesignPage() {
 
       {/* Live Preview - Right Side */}
       <div className="lg:col-span-2">
-        <div className="sticky top-8 bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-lg font-semibold mb-4">Live Preview</h3>
-          <ChatbotPreview
-            chatbotId={chatbot.id}
-            config={chatbot}
-            className="w-full h-96 lg:h-96"
-          />
+        <div className="sticky top-8 bg-white rounded-lg border border-gray-200 p-4 h-96 flex flex-col">
+          <h3 className="text-lg font-semibold mb-4 flex-shrink-0">
+            Live Preview
+          </h3>
+          <div className="flex-1 min-h-0">
+            <ChatbotPreview
+              chatbotId={chatbot.id}
+              config={chatbot}
+              className="w-full h-full"
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -183,15 +183,13 @@ export function ChatbotPreview({
   };
 
   return (
-    <Card className={className}>
-      <CardContent className="p-0">
-        <iframe
-          ref={iframeRef}
-          className="w-full h-full border-0 rounded-lg"
-          title="Chatbot Preview"
-          sandbox="allow-scripts allow-same-origin"
-        />
-      </CardContent>
-    </Card>
+    <div className={className}>
+      <iframe
+        ref={iframeRef}
+        className="w-full h-full border-0 rounded-lg shadow-sm"
+        title="Chatbot Preview"
+        sandbox="allow-scripts allow-same-origin"
+      />
+    </div>
   );
 }
