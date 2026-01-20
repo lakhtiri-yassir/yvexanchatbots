@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import React, { useEffect, useRef } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface ChatbotPreviewProps {
   chatbotId: string;
@@ -9,14 +9,18 @@ interface ChatbotPreviewProps {
   className?: string;
 }
 
-export function ChatbotPreview({ chatbotId, config, className }: ChatbotPreviewProps) {
+export function ChatbotPreview({
+  chatbotId,
+  config,
+  className,
+}: ChatbotPreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (iframeRef.current) {
       // Generate preview HTML with current config
       const previewHTML = generatePreviewHTML(chatbotId, config);
-      const blob = new Blob([previewHTML], { type: 'text/html' });
+      const blob = new Blob([previewHTML], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       iframeRef.current.src = url;
 
@@ -27,8 +31,6 @@ export function ChatbotPreview({ chatbotId, config, className }: ChatbotPreviewP
   }, [chatbotId, config]);
 
   const generatePreviewHTML = (chatbotId: string, config: any) => {
-    const siteUrl = process.env.SITE_URL || 'https://yvexanchatbots.netlify.app';
-    
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -39,119 +41,142 @@ export function ChatbotPreview({ chatbotId, config, className }: ChatbotPreviewP
   <style>
     body {
       margin: 0;
-      padding: 16px;
-      font-family: ${config.typography?.fontFamily || 'Inter, sans-serif'};
-      background: #f8fafc;
+      padding: 0;
+      font-family: ${config.typography?.fontFamily || "Inter, sans-serif"};
+      background: #fff;
       height: 100vh;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
     }
     
-    .preview-container {
-      position: relative;
-      width: 100%;
+    .chatbot-container {
+      display: flex;
+      flex-direction: column;
       height: 100%;
-      max-width: 400px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
+      background: ${config.color_scheme?.widgetBackground || "#ffffff"};
+      border: 1px solid #e5e7eb;
     }
     
-    .preview-header {
-      background: #1f2937;
-      color: white;
-      padding: 8px 12px;
-      font-size: 12px;
-      font-weight: 500;
-      text-align: center;
-    }
-    
-    .preview-content {
+    .chatbot-header {
+      background: ${config.color_scheme?.header || "#0f172a"};
+      color: ${config.color_scheme?.headerText || "#ffffff"};
       padding: 16px;
-      height: calc(100% - 40px);
-      position: relative;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    .sample-content {
-      color: white;
       text-align: center;
-      padding: 20px 16px;
-    }
-    
-    .sample-content h1 {
-      font-size: 1.5rem;
-      margin-bottom: 0.5rem;
       font-weight: 600;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      flex-shrink: 0;
     }
     
-    .sample-content p {
-      font-size: 0.875rem;
-      opacity: 0.9;
-      max-width: 300px;
-      margin: 0 auto;
+    .chatbot-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .message {
+      display: flex;
+      gap: 8px;
+      max-width: 80%;
+    }
+    
+    .message.bot {
+      align-self: flex-start;
+    }
+    
+    .message.user {
+      align-self: flex-end;
+    }
+    
+    .message-bubble {
+      padding: 12px 16px;
+      border-radius: 12px;
+      word-wrap: break-word;
+      font-size: 14px;
       line-height: 1.4;
     }
     
-    .chat-widget-preview {
-      position: absolute;
-      bottom: 16px;
-      right: 16px;
-      width: 48px;
-      height: 48px;
-      background: ${config.color_scheme?.header || '#000000'};
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      cursor: pointer;
-      transition: transform 0.2s ease;
+    .message.bot .message-bubble {
+      background: ${config.color_scheme?.botMessage || "#f3f4f6"};
+      color: ${config.color_scheme?.botMessageText || "#1f2937"};
     }
     
-    .chat-widget-preview:hover {
-      transform: scale(1.1);
+    .message.user .message-bubble {
+      background: ${config.color_scheme?.userMessage || "#3b82f6"};
+      color: ${config.color_scheme?.userMessageText || "#ffffff"};
+    }
+    
+    .chatbot-input {
+      background: ${config.color_scheme?.inputBackground || "#f9fafb"};
+      border-top: 1px solid #e5e7eb;
+      padding: 12px 16px;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    
+    .input-field {
+      flex: 1;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 14px;
+      background: ${config.color_scheme?.inputField || "#ffffff"};
+      color: ${config.color_scheme?.inputText || "#1f2937"};
+    }
+    
+    .input-field::placeholder {
+      color: #9ca3af;
+    }
+    
+    .send-button {
+      background: ${config.color_scheme?.button || "#3b82f6"};
+      color: ${config.color_scheme?.buttonText || "#ffffff"};
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+    
+    .send-button:hover {
+      opacity: 0.9;
     }
   </style>
 </head>
 <body>
-  <div class="preview-container">
-    <div class="preview-header">
-      Preview: ${config.ui_layout === 'full' ? 'Full Screen Mode' : 'Corner Widget Mode'}
+  <div class="chatbot-container">
+    <div class="chatbot-header">
+      ${config.owner_name || "Assistant"}
     </div>
-    <div class="preview-content">
-      <div class="sample-content">
-        <h1>Your Website</h1>
-        <p>This is how your chatbot will appear on your website. The chatbot widget will be positioned according to your layout settings.</p>
+    
+    <div class="chatbot-messages">
+      <div class="message bot">
+        <div class="message-bubble">
+          ${config.starting_phrase || "Hi there! How can I help you today?"}
+        </div>
       </div>
-      
-      <div class="chat-widget-preview">
-        💬
+      <div class="message user">
+        <div class="message-bubble">
+          Hello! I'd like to know more.
+        </div>
       </div>
+      <div class="message bot">
+        <div class="message-bubble">
+          I'm here to help! Feel free to ask me anything.
+        </div>
+      </div>
+    </div>
+    
+    <div class="chatbot-input">
+      <input type="text" class="input-field" placeholder="Type your message..." />
+      <button class="send-button">Send</button>
     </div>
   </div>
-
-  <!-- Load the actual chatbot widget -->
-  <script>
-    (function() {
-      // Simulate the embed script loading
-      const script = document.createElement('script');
-      script.src = '${siteUrl}/embed/${chatbotId}.js';
-      script.async = true;
-      script.crossOrigin = 'anonymous';
-      
-      // Add configuration data attributes
-      script.setAttribute('data-layout', '${config.ui_layout || 'corner'}');
-      script.setAttribute('data-theme', '${config.ui_theme || 'light'}');
-      script.setAttribute('data-preview', 'true');
-      
-      document.head.appendChild(script);
-    })();
-  </script>
 </body>
 </html>
     `;
@@ -162,7 +187,7 @@ export function ChatbotPreview({ chatbotId, config, className }: ChatbotPreviewP
       <CardContent className="p-0">
         <iframe
           ref={iframeRef}
-          className="w-full h-64 border-0 rounded-lg"
+          className="w-full h-full border-0 rounded-lg"
           title="Chatbot Preview"
           sandbox="allow-scripts allow-same-origin"
         />
