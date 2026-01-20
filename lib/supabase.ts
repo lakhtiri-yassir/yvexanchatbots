@@ -1,35 +1,65 @@
 // lib/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabaseClient: any = null;
+let supabaseAdminClient: any = null;
 
-// DEBUG: Log what's available
-console.log("DEBUG Supabase Config:", {
-  url: supabaseUrl ? "SET" : "MISSING",
-  key: supabaseAnonKey ? "SET" : "MISSING",
-  serviceKey: supabaseServiceKey ? "SET" : "MISSING",
-  allEnv: Object.keys(process.env).filter((k) => k.includes("SUPABASE")),
-});
+// Lazy initialize client only when first used
+export function getSupabase() {
+  if (supabaseClient) return supabaseClient;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing required Supabase environment variables. URL: " +
-      (supabaseUrl ? "OK" : "MISSING") +
-      ", Key: " +
-      (supabaseAnonKey ? "OK" : "MISSING")
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      `Supabase environment variables missing. URL: ${
+        url ? "OK" : "MISSING"
+      }, Key: ${key ? "OK" : "MISSING"}`
+    );
+  }
+
+  console.log("Initializing Supabase client with URL:", url);
+  supabaseClient = createClient(url, key);
+  return supabaseClient;
 }
 
-// Client-side Supabase client (for auth, public operations)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Lazy initialize admin client
+export function getSupabaseAdmin() {
+  if (supabaseAdminClient) return supabaseAdminClient;
 
-// Server-side Supabase client (for admin operations, bypasses RLS)
-export const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey || ""
-);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceKey) {
+    console.warn("Supabase admin client not available - missing credentials");
+    return null;
+  }
+
+  supabaseAdminClient = createClient(url, serviceKey);
+  return supabaseAdminClient;
+}
+
+// Export as getters for backward compatibility
+export const supabase = {
+  get auth() {
+    return getSupabase().auth;
+  },
+  from(table: string) {
+    return getSupabase().from(table);
+  },
+  rpc(fn: string, args?: any) {
+    return getSupabase().rpc(fn, args);
+  },
+};
+
+export const supabaseAdmin = {
+  from(table: string) {
+    const admin = getSupabaseAdmin();
+    if (!admin) throw new Error("Supabase admin client not initialized");
+    return admin.from(table);
+  },
+};
 
 export type Database = {
   public: {
