@@ -1712,7 +1712,8 @@ export function DesignPanel({
                 Voice Configuration Moved
               </h3>
               <p className="text-gray-600">
-                Voice configuration settings have been moved to the dedicated Voice section in the sidebar for better organization.
+                Voice configuration settings have been moved to the dedicated
+                Voice section in the sidebar for better organization.
               </p>
             </CardContent>
           </Card>
