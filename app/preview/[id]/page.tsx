@@ -95,7 +95,7 @@ export default function PreviewPage() {
               <iframe
                 className="w-full h-full border-0"
                 sandbox="allow-same-origin allow-scripts allow-forms"
-                src={`/embed/${chatbotId}`}
+                src={`/chatbot-embed?id=${chatbotId}`}
               />
             </div>
           )}
@@ -124,7 +124,7 @@ export default function PreviewPage() {
           <iframe
             className="flex-1 w-full border-0"
             sandbox="allow-same-origin allow-scripts allow-forms"
-            src={`/embed/${chatbotId}`}
+            src={`/chatbot-embed?id=${chatbotId}`}
           />
         </div>
       </div>
@@ -364,7 +364,7 @@ export default function PreviewPage() {
                   <iframe
                     className="w-full h-full border-0"
                     sandbox="allow-same-origin allow-scripts allow-forms"
-                    src={`/embed/${chatbotId}`}
+                    src={`/chatbot-embed?id=${chatbotId}`}
                   />
                 </div>
               )}
