@@ -7,26 +7,32 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["*"],
+      bodySizeLimit: "2mb",
+    },
+  },
   async headers() {
     return [
       {
-        source: '/api/embed/:path*',
+        source: "/api/embed/:path*",
         headers: [
           {
-            key: 'Access-Control-Allow-Origin',
-            value: '*',
+            key: "Access-Control-Allow-Origin",
+            value: "*",
           },
           {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET, OPTIONS',
+            key: "Access-Control-Allow-Methods",
+            value: "GET, OPTIONS",
           },
           {
-            key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization',
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
           },
           {
-            key: 'Content-Type',
-            value: 'text/javascript; charset=utf-8',
+            key: "Content-Type",
+            value: "text/javascript; charset=utf-8",
           },
         ],
       },
