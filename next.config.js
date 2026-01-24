@@ -8,10 +8,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   experimental: {
-    serverActions: {
-      allowedOrigins: ["*"],
-      bodySizeLimit: "2mb",
-    },
+    serverActions: true,
   },
   async headers() {
     return [

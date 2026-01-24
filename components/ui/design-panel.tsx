@@ -35,7 +35,12 @@ import {
   Eye,
   Play,
   Pause,
+  Download,
+  Upload,
+  Library,
 } from "lucide-react";
+import { DesignExportDialog } from "./design-export-dialog";
+import { DesignImportDialog } from "./design-import-dialog";
 
 interface DesignConfig {
   // Layout
@@ -213,12 +218,14 @@ export function DesignPanel({
   const [previewMode, setPreviewMode] = useState<
     "desktop" | "tablet" | "mobile"
   >("desktop");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
 
   const updateConfig = (
     section: keyof DesignConfig,
     field: string,
-    value: any
+    value: any,
   ) => {
     const newConfig = { ...config };
     if (typeof newConfig[section] === "object" && newConfig[section] !== null) {
@@ -233,7 +240,7 @@ export function DesignPanel({
     section: keyof DesignConfig,
     subsection: string,
     field: string,
-    value: any
+    value: any,
   ) => {
     const newConfig = { ...config };
     if (typeof newConfig[section] === "object" && newConfig[section] !== null) {
@@ -250,7 +257,7 @@ export function DesignPanel({
     try {
       await onVoicePreview(
         voiceId,
-        "Hello! This is how I sound with the current voice settings."
+        "Hello! This is how I sound with the current voice settings.",
       );
     } finally {
       setIsPlayingVoice(false);
@@ -259,18 +266,37 @@ export function DesignPanel({
 
   return (
     <div className="space-y-6">
-      {/* Preview Controls */}
+      {/* Export/Import Controls */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Eye className="h-5 w-5" />
-            <span>Live Preview</span>
+            <Library className="h-5 w-5" />
+            <span>Design Management</span>
           </CardTitle>
           <CardDescription>
-            Preview your chatbot design in real-time
+            Export, import, or save your design configuration
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExportDialogOpen(true)}
+              className="w-full"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(true)}
+              className="w-full"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Button
               variant={previewMode === "desktop" ? "default" : "outline"}
@@ -279,8 +305,8 @@ export function DesignPanel({
                 setPreviewMode("desktop");
                 onPreviewModeChange?.("desktop");
               }}
+              className="flex-1"
             >
-              <Monitor className="h-4 w-4 mr-2" />
               Desktop
             </Button>
             <Button
@@ -290,8 +316,8 @@ export function DesignPanel({
                 setPreviewMode("tablet");
                 onPreviewModeChange?.("tablet");
               }}
+              className="flex-1"
             >
-              <Layout className="h-4 w-4 mr-2" />
               Tablet
             </Button>
             <Button
@@ -301,8 +327,8 @@ export function DesignPanel({
                 setPreviewMode("mobile");
                 onPreviewModeChange?.("mobile");
               }}
+              className="flex-1"
             >
-              <Smartphone className="h-4 w-4 mr-2" />
               Mobile
             </Button>
           </div>
@@ -428,7 +454,7 @@ export function DesignPanel({
                       updateConfig(
                         "responsive_config",
                         "mobileWidth",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="100%"
@@ -443,7 +469,7 @@ export function DesignPanel({
                       updateConfig(
                         "responsive_config",
                         "mobileHeight",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="100vh"
@@ -460,7 +486,7 @@ export function DesignPanel({
                       updateConfig(
                         "responsive_config",
                         "tabletWidth",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="400px"
@@ -475,7 +501,7 @@ export function DesignPanel({
                       updateConfig(
                         "responsive_config",
                         "tabletHeight",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="600px"
@@ -515,7 +541,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "background",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -526,7 +552,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "background",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#ffffff"
@@ -567,7 +593,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "textPrimary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -578,7 +604,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "textPrimary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#111827"
@@ -597,7 +623,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "textSecondary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -608,7 +634,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "textSecondary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#6b7280"
@@ -637,7 +663,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "botMessage",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -648,7 +674,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "botMessage",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#f3f4f6"
@@ -667,7 +693,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "userMessage",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -678,7 +704,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "userMessage",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#3b82f6"
@@ -707,7 +733,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "inputField",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -718,7 +744,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "inputField",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#ffffff"
@@ -737,7 +763,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "inputBorder",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -748,7 +774,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "inputBorder",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#d1d5db"
@@ -767,7 +793,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "buttonPrimary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -778,7 +804,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "buttonPrimary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#3b82f6"
@@ -797,7 +823,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "buttonSecondary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -808,7 +834,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "buttonSecondary",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#6b7280"
@@ -859,7 +885,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "success",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -870,7 +896,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "success",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#10b981"
@@ -889,7 +915,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "warning",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         className="w-16 h-10 p-1 border rounded"
@@ -900,7 +926,7 @@ export function DesignPanel({
                           updateConfig(
                             "color_scheme",
                             "warning",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="#f59e0b"
@@ -1067,7 +1093,7 @@ export function DesignPanel({
                     updateConfig(
                       "typography",
                       "fontFamily",
-                      `${value}, -apple-system, BlinkMacSystemFont, sans-serif`
+                      `${value}, -apple-system, BlinkMacSystemFont, sans-serif`,
                     )
                   }
                 >
@@ -1214,7 +1240,7 @@ export function DesignPanel({
                         updateConfig(
                           "header_config",
                           "customTitle",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="Custom header title"
@@ -1239,7 +1265,7 @@ export function DesignPanel({
                           updateConfig(
                             "header_config",
                             "showOwnerName",
-                            checked
+                            checked,
                           )
                         }
                       />
@@ -1256,7 +1282,7 @@ export function DesignPanel({
                           updateConfig(
                             "header_config",
                             "headerHeight",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="60px"
@@ -1271,7 +1297,7 @@ export function DesignPanel({
                           updateConfig(
                             "header_config",
                             "logoSize",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="32px"
@@ -1356,7 +1382,7 @@ export function DesignPanel({
                       updateConfig(
                         "bubble_config",
                         "borderRadius",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="18px"
@@ -1403,7 +1429,7 @@ export function DesignPanel({
                         updateConfig(
                           "bubble_config",
                           "tailSize",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="8px"
@@ -1483,7 +1509,7 @@ export function DesignPanel({
                       updateConfig(
                         "input_config",
                         "borderRadius",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="24px"
@@ -1572,7 +1598,7 @@ export function DesignPanel({
                         updateConfig(
                           "input_config",
                           "buttonSize",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="36px"
@@ -1597,7 +1623,7 @@ export function DesignPanel({
                       updateConfig(
                         "input_config",
                         "showCharacterCount",
-                        checked
+                        checked,
                       )
                     }
                   />
@@ -1613,7 +1639,7 @@ export function DesignPanel({
                       updateConfig(
                         "input_config",
                         "maxCharacters",
-                        e.target.value
+                        e.target.value,
                       )
                     }
                     placeholder="500"
@@ -1649,7 +1675,7 @@ export function DesignPanel({
                         updateConfig(
                           "footer_config",
                           "customBrandingText",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="Powered by Yvexan Agency"
@@ -1664,7 +1690,7 @@ export function DesignPanel({
                         updateConfig(
                           "footer_config",
                           "customBrandingUrl",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="https://yvexan-agency.com"
@@ -1753,7 +1779,7 @@ export function DesignPanel({
                     updateConfig(
                       "animation_config",
                       "transitionDuration",
-                      e.target.value
+                      e.target.value,
                     )
                   }
                   placeholder="300ms"
@@ -1768,7 +1794,7 @@ export function DesignPanel({
                       updateConfig(
                         "animation_config",
                         "typingIndicator",
-                        checked
+                        checked,
                       )
                     }
                   />
@@ -1818,6 +1844,22 @@ export function DesignPanel({
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Export Dialog */}
+      <DesignExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        config={config}
+        chatbotName={config.name}
+      />
+
+      {/* Import Dialog */}
+      <DesignImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        currentConfig={config}
+        onApplyImport={onChange}
+      />
     </div>
   );
 }
