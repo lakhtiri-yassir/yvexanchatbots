@@ -64,3 +64,13 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_design_themes_updated_at BEFORE UPDATE
 ON design_themes FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to increment theme usage count
+CREATE OR REPLACE FUNCTION increment_theme_usage(theme_id UUID)
+RETURNS void AS $$
+BEGIN
+  UPDATE design_themes
+  SET times_applied = times_applied + 1
+  WHERE id = theme_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
