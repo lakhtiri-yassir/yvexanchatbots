@@ -1,37 +1,54 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { signIn } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { signIn } from "@/lib/auth";
+import { useAuth } from "@/providers/auth-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     const { data, error } = await signIn(email, password);
 
     if (error) {
-      if (error.message.includes('Email not confirmed')) {
-        setError('Please check your email and click the confirmation link to verify your account before signing in.');
+      if (error.message.includes("Email not confirmed")) {
+        setError(
+          "Please check your email and click the confirmation link to verify your account before signing in.",
+        );
       } else {
         setError(error.message);
       }
     } else if (data.user) {
-      router.push('/dashboard');
+      router.push("/dashboard");
     }
 
     setLoading(false);
@@ -41,10 +58,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Sign in to your account</h2>
+          <h2 className="text-3xl font-bold text-gray-900">
+            Sign in to your account
+          </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Or{' '}
-            <Link href="/register" className="font-medium text-black hover:text-gray-700">
+            Or{" "}
+            <Link
+              href="/register"
+              className="font-medium text-black hover:text-gray-700"
+            >
               create a new account
             </Link>
           </p>
@@ -95,7 +117,7 @@ export default function LoginPage() {
                 className="w-full bg-black text-white hover:bg-gray-800"
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : 'Sign in'}
+                {loading ? "Signing in..." : "Sign in"}
               </Button>
             </form>
           </CardContent>

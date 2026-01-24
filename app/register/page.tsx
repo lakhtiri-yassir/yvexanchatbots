@@ -1,37 +1,52 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { signUp } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { signUp } from "@/lib/auth";
+import { useAuth } from "@/providers/auth-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { AlertCircle, CheckCircle } from "lucide-react";
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       setLoading(false);
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setError("Password must be at least 6 characters long");
       setLoading(false);
       return;
     }
@@ -42,12 +57,14 @@ export default function RegisterPage() {
       setError(error.message);
     } else if (data.user && !data.user.email_confirmed_at) {
       // User created but needs email confirmation
-      setError('Please check your email and click the confirmation link before signing in.');
+      setError(
+        "Please check your email and click the confirmation link before signing in.",
+      );
     } else if (data.user) {
       // User created and confirmed (or confirmation disabled)
       setSuccess(true);
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push("/dashboard");
       }, 2000);
     }
 
@@ -62,8 +79,12 @@ export default function RegisterPage() {
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 <CheckCircle className="h-12 w-12 text-green-600 mx-auto" />
-                <h2 className="text-2xl font-bold text-gray-900">Account created successfully!</h2>
-                <p className="text-gray-600">Redirecting you to the dashboard...</p>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Account created successfully!
+                </h2>
+                <p className="text-gray-600">
+                  Redirecting you to the dashboard...
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -76,10 +97,15 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
+          <h2 className="text-3xl font-bold text-gray-900">
+            Create your account
+          </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Or{' '}
-            <Link href="/login" className="font-medium text-black hover:text-gray-700">
+            Or{" "}
+            <Link
+              href="/login"
+              className="font-medium text-black hover:text-gray-700"
+            >
               sign in to your existing account
             </Link>
           </p>
@@ -142,7 +168,7 @@ export default function RegisterPage() {
                 className="w-full bg-black text-white hover:bg-gray-800"
                 disabled={loading}
               >
-                {loading ? 'Creating account...' : 'Create account'}
+                {loading ? "Creating account..." : "Create account"}
               </Button>
             </form>
           </CardContent>

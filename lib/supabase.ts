@@ -15,12 +15,18 @@ export function getSupabase() {
     throw new Error(
       `Supabase environment variables missing. URL: ${
         url ? "OK" : "MISSING"
-      }, Key: ${key ? "OK" : "MISSING"}`
+      }, Key: ${key ? "OK" : "MISSING"}`,
     );
   }
 
   console.log("Initializing Supabase client with URL:", url);
-  supabaseClient = createClient(url, key);
+  supabaseClient = createClient(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
   return supabaseClient;
 }
 
