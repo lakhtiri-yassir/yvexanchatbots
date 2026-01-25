@@ -18,11 +18,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
     }
 
+    // Fetch knowledge base files
+    const { data: knowledgeFiles } = await supabase
+      .from('knowledge_base_files')
+      .select('*')
+      .eq('chatbot_id', chatbotId)
+      .limit(5); // Limit to 5 most recent files
+
+    let knowledgeContext = '';
+    
+    // Download and read file contents
+    if (knowledgeFiles && knowledgeFiles.length > 0) {
+      for (const file of knowledgeFiles) {
+        try {
+          const { data: fileData } = await supabase.storage
+            .from('knowledge-base')
+            .download(file.file_path);
+
+          if (fileData) {
+            const text = await fileData.text();
+            knowledgeContext += `\n\n--- Content from ${file.filename} ---\n${text}\n`;
+          }
+        } catch (err) {
+          console.error(`Failed to read ${file.filename}:`, err);
+        }
+      }
+    }
+
     // Prepare messages for OpenRouter
+    let systemPrompt = chatbot.prompt || 'You are a helpful AI assistant.';
+    
+    // Add knowledge base context to prompt
+    if (knowledgeContext) {
+      systemPrompt += '\n\nYou have access to the following knowledge base. Use this information to answer questions accurately:\n' + knowledgeContext;
+    }
+
     const messages: ChatMessage[] = [
       {
         role: 'system' as const,
-        content: chatbot.prompt || 'You are a helpful AI assistant.',
+        content: systemPrompt,
       },
       {
         role: 'user' as const,
@@ -79,22 +113,17 @@ export async function POST(request: NextRequest) {
         leadData = {
           email: emailMatch ? emailMatch[0] : null,
           phone: phoneMatch ? phoneMatch[0] : null,
-          full_name: null, // Would need more sophisticated NLP to extract names
+          full_name: null,
           conversation_context: { message, response: aiMessage },
         };
 
-        // Store lead data
-        const { error: leadError } = await supabase
+        await supabase
           .from('leads')
           .insert({
             chatbot_id: chatbotId,
             user_id: chatbot.user_id,
             ...leadData,
           });
-
-        if (leadError) {
-          console.error('Error storing lead:', leadError);
-        }
       }
     }
 
@@ -110,16 +139,15 @@ export async function POST(request: NextRequest) {
         
         audioData = Buffer.from(audioBuffer).toString('base64');
 
-        // Log voice usage
         await supabase
           .from('usage_logs')
           .insert({
             chatbot_id: chatbotId,
             user_id: chatbot.user_id,
-            tokens_used: aiMessage.length, // Character count for voice
+            tokens_used: aiMessage.length,
             model_used: 'elevenlabs-tts',
             request_type: 'voice',
-            cost_estimate: aiMessage.length * 0.00001, // Rough estimate
+            cost_estimate: aiMessage.length * 0.00001,
           });
       } catch (voiceError) {
         console.error('Voice generation error:', voiceError);
