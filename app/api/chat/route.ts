@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { chatWithAdvancedRouting, ChatMessage } from '@/lib/openrouter-advanced';
 import { generateSpeech } from '@/lib/elevenlabs';
+import { detectIntent, extractPostContent } from '@/lib/intent-detector';
+import { 
+  categorizeKnowledgeFile, 
+  extractInstructionTemplate, 
+  buildContextualPrompt,
+  cleanResponse,
+  InstructionTemplate
+} from '@/lib/knowledge-processor';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,11 +31,13 @@ export async function POST(request: NextRequest) {
       .from('knowledge_base_files')
       .select('*')
       .eq('chatbot_id', chatbotId)
-      .limit(5); // Limit to 5 most recent files
+      .limit(10); // Increased limit for more context
 
-    let knowledgeContext = '';
-    
-    // Download and read file contents
+    // INTELLIGENT KNOWLEDGE PROCESSING
+    const instructionTemplates: InstructionTemplate[] = [];
+    const factualKnowledge: string[] = [];
+
+    // Process knowledge base files
     if (knowledgeFiles && knowledgeFiles.length > 0) {
       for (const file of knowledgeFiles) {
         try {
@@ -37,7 +47,21 @@ export async function POST(request: NextRequest) {
 
           if (fileData) {
             const text = await fileData.text();
-            knowledgeContext += `\n\n--- Content from ${file.filename} ---\n${text}\n`;
+            
+            // Categorize the file
+            const category = categorizeKnowledgeFile(file.filename, text);
+            
+            console.log(`File: ${file.filename}, Category: ${category}`);
+            
+            if (category === 'instruction_template') {
+              // Extract structured instruction template
+              const template = extractInstructionTemplate(text);
+              instructionTemplates.push(template);
+              console.log('Extracted instruction template:', template.systemRules.substring(0, 100));
+            } else if (category === 'factual_knowledge') {
+              // Store as factual knowledge
+              factualKnowledge.push(`--- Content from ${file.filename} ---\n${text}`);
+            }
           }
         } catch (err) {
           console.error(`Failed to read ${file.filename}:`, err);
@@ -45,14 +69,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Prepare messages for OpenRouter
-    let systemPrompt = chatbot.prompt || 'You are a helpful AI assistant.';
+    // INTENT DETECTION
+    const intent = detectIntent(message);
+    const postContent = extractPostContent(message);
     
-    // Add knowledge base context to prompt
-    if (knowledgeContext) {
-      systemPrompt += '\n\nYou have access to the following knowledge base. Use this information to answer questions accurately:\n' + knowledgeContext;
+    console.log('Detected intent:', intent);
+    console.log('Post content extracted:', postContent ? 'Yes' : 'No');
+
+    // BUILD CONTEXTUAL SYSTEM PROMPT
+    const systemPrompt = buildContextualPrompt(
+      intent,
+      instructionTemplates,
+      factualKnowledge,
+      postContent || message,
+      chatbot.prompt || 'You are a helpful AI assistant.'
+    );
+
+    console.log('System prompt length:', systemPrompt.length);
+    console.log('System prompt preview:', systemPrompt.substring(0, 200));
+
+    // Prepare user message
+    let userMessage = message;
+    
+    // For framework intents with extracted post, use just the post
+    if ((intent === 'hook_generation' || intent === 'post_rewrite') && postContent) {
+      userMessage = postContent;
     }
 
+    // Prepare messages for OpenRouter
     const messages: ChatMessage[] = [
       {
         role: 'system' as const,
@@ -60,12 +104,12 @@ export async function POST(request: NextRequest) {
       },
       {
         role: 'user' as const,
-        content: message,
+        content: userMessage,
       },
     ];
 
-    // Add lead capture prompt if enabled
-    if (chatbot.data_capture_enabled) {
+    // Add lead capture prompt ONLY for normal conversation
+    if (chatbot.data_capture_enabled && intent === 'normal_conversation') {
       messages[0].content += '\n\nIf appropriate during the conversation, naturally ask for the user\'s full name, email, and phone number. Don\'t be pushy - only ask when it feels natural based on the conversation context.';
     }
 
@@ -82,10 +126,15 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const aiMessage = chatResponse.message;
+    // Clean the AI response
+    let aiMessage = cleanResponse(chatResponse.message, intent);
+    
     const tokensUsed = chatResponse.tokensUsed;
     const modelUsed = chatResponse.model;
     const estimatedCost = chatResponse.cost;
+
+    console.log('AI response length:', aiMessage.length);
+    console.log('AI response preview:', aiMessage.substring(0, 200));
 
     // Log usage
     const { error: usageError } = await supabase
@@ -103,9 +152,9 @@ export async function POST(request: NextRequest) {
       console.error('Error logging usage:', usageError);
     }
 
-    // Check for lead information extraction
+    // Check for lead information extraction (only for normal conversation)
     let leadData = null;
-    if (chatbot.data_capture_enabled) {
+    if (chatbot.data_capture_enabled && intent === 'normal_conversation') {
       const emailMatch = message.match(/[\w\.-]+@[\w\.-]+\.\w+/);
       const phoneMatch = message.match(/[\+]?[1-9]?[\d\s\-\(\)]{10,}/);
       
@@ -113,58 +162,58 @@ export async function POST(request: NextRequest) {
         leadData = {
           email: emailMatch ? emailMatch[0] : null,
           phone: phoneMatch ? phoneMatch[0] : null,
-          full_name: null,
+          full_name: null, // Would need more sophisticated extraction
           conversation_context: { message, response: aiMessage },
         };
 
-        await supabase
+        const { error: leadError } = await supabase
           .from('leads')
           .insert({
             chatbot_id: chatbotId,
             user_id: chatbot.user_id,
-            ...leadData,
+            email: leadData.email,
+            phone: leadData.phone,
+            full_name: leadData.full_name,
+            conversation_context: leadData.conversation_context,
           });
+
+        if (leadError) {
+          console.error('Error saving lead:', leadError);
+        }
       }
     }
 
-    let audioData = null;
-    if (chatbot.voice_enabled && chatbot.elevenlabs_api_key && chatbot.voice_id) {
+    // Generate voice if enabled (only for normal conversation)
+    let audioUrl = null;
+    if (chatbot.voice_enabled && 
+        chatbot.elevenlabs_api_key && 
+        chatbot.voice_id &&
+        intent === 'normal_conversation') {
       try {
-        const audioBuffer = await generateSpeech(
+        audioUrl = await generateSpeech(
           chatbot.elevenlabs_api_key,
           chatbot.voice_id,
           aiMessage,
           chatbot.voice_settings
         );
-        
-        audioData = Buffer.from(audioBuffer).toString('base64');
-
-        await supabase
-          .from('usage_logs')
-          .insert({
-            chatbot_id: chatbotId,
-            user_id: chatbot.user_id,
-            tokens_used: aiMessage.length,
-            model_used: 'elevenlabs-tts',
-            request_type: 'voice',
-            cost_estimate: aiMessage.length * 0.00001,
-          });
-      } catch (voiceError) {
-        console.error('Voice generation error:', voiceError);
+      } catch (error) {
+        console.error('Voice generation error:', error);
       }
     }
 
     return NextResponse.json({
       message: aiMessage,
-      audio: audioData,
-      leadCaptured: leadData !== null,
+      audioUrl,
+      leadCaptured: !!leadData,
+      model: modelUsed,
       tokensUsed,
+      intent, // Include intent in response for debugging
     });
 
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to process message', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
