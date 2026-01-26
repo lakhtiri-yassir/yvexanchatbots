@@ -3,14 +3,15 @@ import { supabase, getSupabaseAdmin } from '@/lib/supabase';
 import { chatWithAdvancedRouting, ChatMessage } from '@/lib/openrouter-advanced';
 import { generateSpeech } from '@/lib/elevenlabs';
 import { detectIntent, extractPostContent } from '@/lib/intent-detector';
-import { 
-  categorizeKnowledgeFile, 
-  extractInstructionTemplate, 
-  buildContextualPrompt,
-  cleanResponse,
-  InstructionTemplate
-} from '@/lib/knowledge-processor';
+import { cleanResponse } from '@/lib/knowledge-processor';
 import pdfParse from 'pdf-parse';
+import {
+  retrieveRelevantKnowledge,
+  buildOptimizedPrompt,
+  estimateTokens,
+  getModelContextLimit,
+  type KnowledgeFile
+} from '@/lib/knowledge-retriever';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,25 +37,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
     }
 
+    // INTENT DETECTION (do this early to inform knowledge retrieval)
+    const intent = detectIntent(message);
+    const postContent = extractPostContent(message);
+    
+    console.log('Detected intent:', intent);
+    console.log('Post content extracted:', postContent ? 'Yes' : 'No');
+
     // Fetch knowledge base files using admin client
     const { data: knowledgeFiles, error: knowledgeError } = await supabaseAdmin
       .from('knowledge_base_files')
       .select('*')
       .eq('chatbot_id', chatbotId)
-      .limit(10);
+      .limit(20); // Increased limit
 
     if (knowledgeError) {
       console.error('Error fetching knowledge files:', knowledgeError);
     }
 
-    // INTELLIGENT KNOWLEDGE PROCESSING
-    const instructionTemplates: InstructionTemplate[] = [];
-    const factualKnowledge: string[] = [];
+    // SMART KNOWLEDGE PROCESSING
+    const processedFiles: KnowledgeFile[] = [];
 
-    // Process knowledge base files
     if (knowledgeFiles && knowledgeFiles.length > 0) {
       console.log(`Found ${knowledgeFiles.length} knowledge base files to process`);
       
+      // Process all files and store content in memory
       for (const file of knowledgeFiles) {
         try {
           // Download file using admin client
@@ -74,36 +81,28 @@ export async function POST(request: NextRequest) {
             if (file.file_type === 'pdf' || file.filename.toLowerCase().endsWith('.pdf')) {
               // Parse PDF
               try {
-                console.log(`Parsing PDF: ${file.filename}`);
                 const arrayBuffer = await fileData.arrayBuffer();
                 const pdfData = await pdfParse(Buffer.from(arrayBuffer));
                 text = pdfData.text;
-                console.log(`PDF parsed successfully: ${file.filename}, ${text.length} characters extracted`);
+                console.log(`PDF parsed: ${file.filename}, ${text.length} characters`);
               } catch (pdfError) {
                 console.error(`Failed to parse PDF ${file.filename}:`, pdfError);
-                continue; // Skip this file and move to next
+                continue;
               }
             } else {
-              // Plain text file (TXT, or DOCX converted to text)
+              // Plain text file
               text = await fileData.text();
               console.log(`Text file read: ${file.filename}, ${text.length} characters`);
             }
             
-            // Categorize the file
-            const category = categorizeKnowledgeFile(file.filename, text);
-            
-            console.log(`File: ${file.filename}, Category: ${category}`);
-            
-            if (category === 'instruction_template') {
-              // Extract structured instruction template
-              const template = extractInstructionTemplate(text);
-              instructionTemplates.push(template);
-              console.log('Extracted instruction template:', template.systemRules.substring(0, 100) + '...');
-            } else if (category === 'factual_knowledge') {
-              // Store as factual knowledge
-              factualKnowledge.push(`--- Content from ${file.filename} ---\n${text}`);
-              console.log('Added to factual knowledge base');
-            }
+            // Store processed file
+            processedFiles.push({
+              id: file.id,
+              filename: file.filename,
+              file_type: file.file_type,
+              file_path: file.file_path,
+              content: text
+            });
           }
         } catch (err) {
           console.error(`Failed to process ${file.filename}:`, err);
@@ -113,39 +112,35 @@ export async function POST(request: NextRequest) {
       console.log('No knowledge base files found for this chatbot');
     }
 
-    // Log knowledge base processing results
-    console.log('=== KNOWLEDGE BASE DEBUG ===');
-    console.log(`Total files queried: ${knowledgeFiles?.length || 0}`);
-    console.log(`Instruction templates found: ${instructionTemplates.length}`);
-    console.log(`Factual knowledge items: ${factualKnowledge.length}`);
-    
-    if (instructionTemplates.length > 0) {
-      console.log(`First template preview: ${instructionTemplates[0].systemRules.substring(0, 150)}...`);
-    }
-    
-    if (factualKnowledge.length > 0) {
-      console.log(`First knowledge preview: ${factualKnowledge[0].substring(0, 200)}...`);
-    }
-    console.log('============================');
-
-    // INTENT DETECTION
-    const intent = detectIntent(message);
-    const postContent = extractPostContent(message);
-    
-    console.log('Detected intent:', intent);
-    console.log('Post content extracted:', postContent ? 'Yes' : 'No');
-
-    // BUILD CONTEXTUAL SYSTEM PROMPT
-    const systemPrompt = buildContextualPrompt(
-      intent,
-      instructionTemplates,
-      factualKnowledge,
-      postContent || message,
-      chatbot.prompt || 'You are a helpful AI assistant.'
+    // SMART KNOWLEDGE RETRIEVAL
+    // This is the magic - only select relevant content based on query and model limits
+    const modelName = chatbot.model || 'gpt-3.5-turbo';
+    const retrievalResult = await retrieveRelevantKnowledge(
+      processedFiles,
+      message,
+      modelName,
+      intent
     );
 
-    console.log('System prompt length:', systemPrompt.length);
-    console.log('System prompt preview:', systemPrompt.substring(0, 200));
+    console.log(`\n📊 Retrieval Stats:`);
+    console.log(`  Strategy: ${retrievalResult.selectionStrategy}`);
+    console.log(`  Chunks selected: ${retrievalResult.chunks.length}`);
+    console.log(`  Files used: ${retrievalResult.filesUsed.join(', ')}`);
+    console.log(`  Total tokens: ${retrievalResult.totalTokens}`);
+    console.log(`  Model limit: ${getModelContextLimit(modelName)}`);
+
+    // BUILD OPTIMIZED SYSTEM PROMPT
+    const systemPrompt = buildOptimizedPrompt(
+      chatbot.prompt || 'You are a helpful AI assistant.',
+      retrievalResult,
+      intent
+    );
+
+    const promptTokens = estimateTokens(systemPrompt);
+    console.log(`\n📝 Final Prompt Stats:`);
+    console.log(`  System prompt tokens: ${promptTokens}`);
+    console.log(`  Model capacity: ${getModelContextLimit(modelName)}`);
+    console.log(`  Utilization: ${((promptTokens / getModelContextLimit(modelName)) * 100).toFixed(1)}%`);
 
     // Prepare user message
     let userMessage = message;
@@ -173,13 +168,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get response from OpenRouter
+    console.log(`\n🤖 Sending to ${modelName}...`);
     const chatResponse = await chatWithAdvancedRouting(
       chatbot.openrouter_api_key,
       messages,
       {
         preferredModel: chatbot.model,
         autoModelSelection: chatbot.auto_model_selection,
-        fallbackModels: chatbot.fallback_models || ['gpt-3.5-turbo', 'claude-3.5-haiku'],
+        fallbackModels: chatbot.fallback_models || ['gpt-4-turbo', 'claude-3-opus-20240229'],
         temperature: 0.7,
         maxTokens: 2000
       }
@@ -192,8 +188,10 @@ export async function POST(request: NextRequest) {
     const modelUsed = chatResponse.model;
     const estimatedCost = chatResponse.cost;
 
-    console.log('AI response length:', aiMessage.length);
-    console.log('AI response preview:', aiMessage.substring(0, 200));
+    console.log(`\n✅ Response generated successfully`);
+    console.log(`  Model used: ${modelUsed}`);
+    console.log(`  Tokens: ${tokensUsed}`);
+    console.log(`  Cost: $${estimatedCost.toFixed(4)}`);
 
     // Log usage using admin client
     const { error: usageError } = await supabaseAdmin
@@ -209,8 +207,6 @@ export async function POST(request: NextRequest) {
 
     if (usageError) {
       console.error('Error logging usage:', usageError);
-    } else {
-      console.log('Usage logged successfully');
     }
 
     // Check for lead information extraction (only for normal conversation)
