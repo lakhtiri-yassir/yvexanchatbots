@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSupabaseAdmin } from '@/lib/supabase';
 import { chatWithAdvancedRouting, ChatMessage } from '@/lib/openrouter-advanced';
 import { generateSpeech } from '@/lib/elevenlabs';
 import { detectIntent, extractPostContent } from '@/lib/intent-detector';
@@ -10,28 +10,42 @@ import {
   cleanResponse,
   InstructionTemplate
 } from '@/lib/knowledge-processor';
+import pdfParse from 'pdf-parse';
 
 export async function POST(request: NextRequest) {
   try {
     const { chatbotId, message, sessionId } = await request.json();
 
-    // Get chatbot configuration
-    const { data: chatbot, error: chatbotError } = await supabase
+    // Use admin client to bypass RLS for server-side operations
+    const supabaseAdmin = getSupabaseAdmin();
+    
+    if (!supabaseAdmin) {
+      console.error('Supabase admin client not available - missing SUPABASE_SERVICE_ROLE_KEY');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+
+    // Get chatbot configuration using admin client
+    const { data: chatbot, error: chatbotError } = await supabaseAdmin
       .from('chatbots')
       .select('*')
       .eq('id', chatbotId)
       .single();
 
     if (chatbotError || !chatbot) {
+      console.error('Chatbot not found:', chatbotError);
       return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
     }
 
-    // Fetch knowledge base files
-    const { data: knowledgeFiles } = await supabase
+    // Fetch knowledge base files using admin client
+    const { data: knowledgeFiles, error: knowledgeError } = await supabaseAdmin
       .from('knowledge_base_files')
       .select('*')
       .eq('chatbot_id', chatbotId)
-      .limit(10); // Increased limit for more context
+      .limit(10);
+
+    if (knowledgeError) {
+      console.error('Error fetching knowledge files:', knowledgeError);
+    }
 
     // INTELLIGENT KNOWLEDGE PROCESSING
     const instructionTemplates: InstructionTemplate[] = [];
@@ -39,14 +53,41 @@ export async function POST(request: NextRequest) {
 
     // Process knowledge base files
     if (knowledgeFiles && knowledgeFiles.length > 0) {
+      console.log(`Found ${knowledgeFiles.length} knowledge base files to process`);
+      
       for (const file of knowledgeFiles) {
         try {
-          const { data: fileData } = await supabase.storage
+          // Download file using admin client
+          const { data: fileData, error: downloadError } = await supabaseAdmin.storage
             .from('knowledge-base')
             .download(file.file_path);
 
+          if (downloadError) {
+            console.error(`Failed to download ${file.filename}:`, downloadError);
+            continue;
+          }
+
           if (fileData) {
-            const text = await fileData.text();
+            let text = '';
+            
+            // Handle different file types
+            if (file.file_type === 'pdf' || file.filename.toLowerCase().endsWith('.pdf')) {
+              // Parse PDF
+              try {
+                console.log(`Parsing PDF: ${file.filename}`);
+                const arrayBuffer = await fileData.arrayBuffer();
+                const pdfData = await pdfParse(Buffer.from(arrayBuffer));
+                text = pdfData.text;
+                console.log(`PDF parsed successfully: ${file.filename}, ${text.length} characters extracted`);
+              } catch (pdfError) {
+                console.error(`Failed to parse PDF ${file.filename}:`, pdfError);
+                continue; // Skip this file and move to next
+              }
+            } else {
+              // Plain text file (TXT, or DOCX converted to text)
+              text = await fileData.text();
+              console.log(`Text file read: ${file.filename}, ${text.length} characters`);
+            }
             
             // Categorize the file
             const category = categorizeKnowledgeFile(file.filename, text);
@@ -57,17 +98,35 @@ export async function POST(request: NextRequest) {
               // Extract structured instruction template
               const template = extractInstructionTemplate(text);
               instructionTemplates.push(template);
-              console.log('Extracted instruction template:', template.systemRules.substring(0, 100));
+              console.log('Extracted instruction template:', template.systemRules.substring(0, 100) + '...');
             } else if (category === 'factual_knowledge') {
               // Store as factual knowledge
               factualKnowledge.push(`--- Content from ${file.filename} ---\n${text}`);
+              console.log('Added to factual knowledge base');
             }
           }
         } catch (err) {
-          console.error(`Failed to read ${file.filename}:`, err);
+          console.error(`Failed to process ${file.filename}:`, err);
         }
       }
+    } else {
+      console.log('No knowledge base files found for this chatbot');
     }
+
+    // Log knowledge base processing results
+    console.log('=== KNOWLEDGE BASE DEBUG ===');
+    console.log(`Total files queried: ${knowledgeFiles?.length || 0}`);
+    console.log(`Instruction templates found: ${instructionTemplates.length}`);
+    console.log(`Factual knowledge items: ${factualKnowledge.length}`);
+    
+    if (instructionTemplates.length > 0) {
+      console.log(`First template preview: ${instructionTemplates[0].systemRules.substring(0, 150)}...`);
+    }
+    
+    if (factualKnowledge.length > 0) {
+      console.log(`First knowledge preview: ${factualKnowledge[0].substring(0, 200)}...`);
+    }
+    console.log('============================');
 
     // INTENT DETECTION
     const intent = detectIntent(message);
@@ -136,8 +195,8 @@ export async function POST(request: NextRequest) {
     console.log('AI response length:', aiMessage.length);
     console.log('AI response preview:', aiMessage.substring(0, 200));
 
-    // Log usage
-    const { error: usageError } = await supabase
+    // Log usage using admin client
+    const { error: usageError } = await supabaseAdmin
       .from('usage_logs')
       .insert({
         chatbot_id: chatbotId,
@@ -150,6 +209,8 @@ export async function POST(request: NextRequest) {
 
     if (usageError) {
       console.error('Error logging usage:', usageError);
+    } else {
+      console.log('Usage logged successfully');
     }
 
     // Check for lead information extraction (only for normal conversation)
@@ -162,58 +223,43 @@ export async function POST(request: NextRequest) {
         leadData = {
           email: emailMatch ? emailMatch[0] : null,
           phone: phoneMatch ? phoneMatch[0] : null,
-          full_name: null, // Would need more sophisticated extraction
-          conversation_context: { message, response: aiMessage },
         };
 
-        const { error: leadError } = await supabase
+        // Save lead using admin client
+        const { error: leadError } = await supabaseAdmin
           .from('leads')
           .insert({
             chatbot_id: chatbotId,
             user_id: chatbot.user_id,
             email: leadData.email,
             phone: leadData.phone,
-            full_name: leadData.full_name,
-            conversation_context: leadData.conversation_context,
+            conversation_context: { message, response: aiMessage },
           });
 
         if (leadError) {
           console.error('Error saving lead:', leadError);
+        } else {
+          console.log('Lead captured successfully');
         }
       }
     }
 
-    // Generate voice if enabled (only for normal conversation)
-    let audioUrl = null;
-    if (chatbot.voice_enabled && 
-        chatbot.elevenlabs_api_key && 
-        chatbot.voice_id &&
-        intent === 'normal_conversation') {
-      try {
-        audioUrl = await generateSpeech(
-          chatbot.elevenlabs_api_key,
-          chatbot.voice_id,
-          aiMessage,
-          chatbot.voice_settings
-        );
-      } catch (error) {
-        console.error('Voice generation error:', error);
-      }
-    }
-
+    // Return response
     return NextResponse.json({
       message: aiMessage,
-      audioUrl,
-      leadCaptured: !!leadData,
-      model: modelUsed,
       tokensUsed,
-      intent, // Include intent in response for debugging
+      model: modelUsed,
+      cost: estimatedCost,
+      leadCaptured: !!leadData,
     });
 
   } catch (error) {
     console.error('Chat API error:', error);
     return NextResponse.json(
-      { error: 'Failed to process message', details: error instanceof Error ? error.message : String(error) },
+      { 
+        error: 'An error occurred processing your message',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }
