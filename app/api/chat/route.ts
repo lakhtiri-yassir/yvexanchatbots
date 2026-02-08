@@ -1,364 +1,271 @@
-/**
- * Knowledge Retrieval System - FIXED VERSION
- * 
- * Key fixes:
- * 1. Token estimation: 1 token = 2.5 chars (was 4 chars - TOO OPTIMISTIC)
- * 2. Aggressive token limiting for general queries
- * 3. Better budget management with safety margins
- */
+import { NextRequest, NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { detectIntent } from '@/lib/intent-detector';
+import { retrieveRelevantKnowledge, buildOptimizedPrompt } from '@/lib/knowledge-retriever';
 
-import { IntentType } from './intent-detector';
-
-export interface KnowledgeFile {
-  id: string;
-  filename: string;
-  file_type: string;
-  file_path: string;
-  content?: string;
-}
-
-export interface ContentChunk {
-  content: string;
-  filename: string;
-  relevanceScore: number;
-  tokens: number;
-}
-
-export interface RetrievalResult {
-  chunks: ContentChunk[];
-  totalTokens: number;
-  filesUsed: string[];
-  selectionStrategy: string;
-}
-
-const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-  'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
-  'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
-  'could', 'can', 'may', 'might', 'must', 'i', 'you', 'he', 'she', 'it',
-  'we', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what',
-  'which', 'who', 'when', 'where', 'why', 'how', 'tell', 'me', 'about',
-  'give', 'want', 'need', 'know', 'get', 'help'
-]);
-
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'gpt-3.5-turbo': 16000,
-  'gpt-4': 8000,
-  'gpt-4-turbo': 128000,
-  'gpt-4o': 128000,
-  'claude-3-opus': 200000,
-  'claude-3-sonnet': 200000,
-  'claude-3-haiku': 200000,
-  'llama-3.1-8b': 128000,
-  'llama-3.1-70b': 128000,
-  'default': 8000
+// CORS headers for embed widget
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-/**
- * CRITICAL FIX: Conservative token estimation
- * Real testing shows 1 token ≈ 2.5-3 characters, NOT 4
- */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 2.5); // FIXED from /4
-}
-
-export function getModelContextLimit(modelName: string): number {
-  if (MODEL_CONTEXT_LIMITS[modelName]) {
-    return MODEL_CONTEXT_LIMITS[modelName];
-  }
-  
-  const lower = modelName.toLowerCase();
-  if (lower.includes('gpt-4-turbo') || lower.includes('gpt-4o')) return 128000;
-  if (lower.includes('gpt-4')) return 8000;
-  if (lower.includes('gpt-3.5')) return 16000;
-  if (lower.includes('claude-3')) return 200000;
-  if (lower.includes('llama-3.1')) return 128000;
-  
-  return 8000;
-}
-
-export function extractKeywords(query: string): string[] {
-  const words = query.toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(word => word.length > 2);
-  
-  const keywords = words.filter(word => !STOP_WORDS.has(word));
-  return [...new Set(keywords)];
-}
-
-export function scoreFileRelevance(
-  filename: string,
-  content: string,
-  keywords: string[]
-): number {
-  if (keywords.length === 0) return 0;
-  
-  let score = 0;
-  const lowerFilename = filename.toLowerCase();
-  const lowerContent = content.toLowerCase();
-  
-  keywords.forEach(keyword => {
-    if (lowerFilename.includes(keyword)) score += 3.0;
-    
-    const matches = (lowerContent.match(new RegExp(keyword, 'g')) || []).length;
-    score += Math.min(matches * 0.2, 5);
-    
-    if (lowerContent.substring(0, 1000).includes(keyword)) score += 1.0;
+// OPTIONS handler for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: corsHeaders,
   });
-  
-  return score;
 }
 
-export function chunkContent(
-  content: string,
-  filename: string,
-  maxChunkSize: number = 2000
-): Array<{ text: string; filename: string }> {
-  const chunks: Array<{ text: string; filename: string }> = [];
-  const paragraphs = content.split(/\n\n+/);
-  let currentChunk = '';
-  
-  for (const paragraph of paragraphs) {
-    const trimmed = paragraph.trim();
-    if (!trimmed) continue;
-    
-    if (currentChunk.length + trimmed.length > maxChunkSize && currentChunk.length > 0) {
-      chunks.push({ text: currentChunk.trim(), filename });
-      currentChunk = '';
+// POST handler for chat messages
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const body = await request.json();
+    const { chatbotId, message, sessionId } = body;
+
+    if (!chatbotId || !message) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400, headers: corsHeaders }
+      );
     }
-    
-    if (trimmed.length > maxChunkSize) {
-      const sentences = trimmed.match(/[^.!?]+[.!?]+/g) || [trimmed];
-      for (const sentence of sentences) {
-        if (currentChunk.length + sentence.length > maxChunkSize && currentChunk.length > 0) {
-          chunks.push({ text: currentChunk.trim(), filename });
-          currentChunk = '';
+
+    console.log(`\n========== CHAT REQUEST ==========`);
+    console.log(`Chatbot ID: ${chatbotId}`);
+    console.log(`Message: "${message.substring(0, 100)}..."`);
+    console.log(`Session: ${sessionId}`);
+
+    // 1. Fetch chatbot configuration
+    const { data: chatbot, error: chatbotError } = await supabase
+      .from('chatbots')
+      .select('*')
+      .eq('id', chatbotId)
+      .single();
+
+    if (chatbotError || !chatbot) {
+      console.error('Chatbot not found:', chatbotError);
+      return NextResponse.json(
+        { error: 'Chatbot not found' },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    console.log(`Using model: ${chatbot.model}`);
+
+    // 2. Fetch knowledge base files
+    const { data: knowledgeFiles, error: kbError } = await supabase
+      .from('knowledge_base_files')
+      .select('id, filename, file_type, file_path')
+      .eq('chatbot_id', chatbotId);
+
+    if (kbError) {
+      console.error('Error fetching knowledge base:', kbError);
+    }
+
+    const files = knowledgeFiles || [];
+    console.log(`Knowledge base files: ${files.length}`);
+
+    // 3. Load file contents
+    const filesWithContent = await Promise.all(
+      files.map(async (file) => {
+        try {
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('knowledge-base')
+            .download(file.file_path);
+
+          if (downloadError) {
+            console.error(`Error downloading ${file.filename}:`, downloadError);
+            return { ...file, content: null };
+          }
+
+          const text = await fileData.text();
+          return { ...file, content: text };
+        } catch (error) {
+          console.error(`Error processing ${file.filename}:`, error);
+          return { ...file, content: null };
         }
-        currentChunk += sentence + ' ';
-      }
-    } else {
-      currentChunk += trimmed + '\n\n';
+      })
+    );
+
+    const validFiles = filesWithContent.filter(f => f.content);
+    console.log(`Loaded ${validFiles.length} files with content`);
+
+    // 4. Detect intent
+    const intent = detectIntent(message);
+    console.log(`Detected intent: ${intent}`);
+
+    // 5. Retrieve relevant knowledge
+    const retrievalResult = await retrieveRelevantKnowledge(
+      validFiles,
+      message,
+      chatbot.model,
+      intent
+    );
+
+    console.log(`Retrieved: ${retrievalResult.chunks.length} chunks, ${retrievalResult.totalTokens} tokens`);
+
+    // 6. Build optimized prompt
+    const systemPrompt = buildOptimizedPrompt(
+      chatbot.prompt || 'You are a helpful AI assistant.',
+      retrievalResult,
+      intent
+    );
+
+    // 7. Call OpenRouter API
+    const modelToUse = chatbot.model || 'anthropic/claude-3-5-sonnet-20241022';
+    const apiKey = chatbot.openrouter_api_key;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'OpenRouter API key not configured' },
+        { status: 500, headers: corsHeaders }
+      );
     }
-  }
-  
-  if (currentChunk.trim()) {
-    chunks.push({ text: currentChunk.trim(), filename });
-  }
-  
-  return chunks;
-}
 
-export function scoreChunkRelevance(chunk: string, keywords: string[]): number {
-  if (keywords.length === 0) return 0;
-  
-  let score = 0;
-  const lower = chunk.toLowerCase();
-  
-  keywords.forEach(keyword => {
-    const matches = (lower.match(new RegExp(keyword, 'g')) || []).length;
-    score += matches * 2;
-    
-    if (lower.substring(0, 100).includes(keyword)) score += 3;
-  });
-  
-  if (keywords.length > 1) {
-    const found = keywords.filter(kw => lower.includes(kw));
-    if (found.length > 1) score += found.length * 1.5;
-  }
-  
-  return score;
-}
+    console.log(`Calling OpenRouter with model: ${modelToUse}`);
 
-export async function retrieveRelevantKnowledge(
-  files: KnowledgeFile[],
-  userMessage: string,
-  modelName: string,
-  intent: IntentType
-): Promise<RetrievalResult> {
-  console.log(`\n=== SMART KNOWLEDGE RETRIEVAL ===`);
-  console.log(`Model: ${modelName}`);
-  console.log(`Intent: ${intent}`);
-  
-  const keywords = extractKeywords(userMessage);
-  console.log(`Keywords: ${keywords.join(', ')}`);
-  
-  const modelLimit = getModelContextLimit(modelName);
-  console.log(`Model limit: ${modelLimit} tokens`);
-  
-  // CRITICAL FIX: More aggressive reservation and capping
-  const reservedTokens = 4000;
-  const rawAvailable = modelLimit - reservedTokens;
-  const maxKnowledge = keywords.length >= 2 ? 35000 : 15000; // REDUCED caps
-  const availableTokens = Math.min(rawAvailable, maxKnowledge);
-  
-  console.log(`Available for knowledge: ${availableTokens} tokens`);
-  
-  if (keywords.length < 2) {
-    console.log('Strategy: Limited general knowledge');
-    return await retrieveGeneralKnowledge(files, availableTokens);
-  }
-  
-  console.log('Strategy: Semantic chunking');
-  return await retrieveSemanticKnowledge(files, keywords, availableTokens);
-}
-
-async function retrieveSemanticKnowledge(
-  files: KnowledgeFile[],
-  keywords: string[],
-  availableTokens: number
-): Promise<RetrievalResult> {
-  
-  const scoredFiles = files
-    .map(file => ({
-      file,
-      score: scoreFileRelevance(file.filename, file.content || '', keywords)
-    }))
-    .sort((a, b) => b.score - a.score);
-  
-  const allChunks: ContentChunk[] = [];
-  
-  for (const { file, score: fileScore } of scoredFiles) {
-    if (!file.content) continue;
-    
-    const fileChunks = chunkContent(file.content, file.filename);
-    
-    fileChunks.forEach(chunk => {
-      const chunkScore = scoreChunkRelevance(chunk.text, keywords);
-      if (chunkScore > 0) {
-        allChunks.push({
-          content: chunk.text,
-          filename: file.filename,
-          relevanceScore: fileScore + chunkScore,
-          tokens: estimateTokens(chunk.text)
-        });
-      }
+    const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://yvexanchatbots.netlify.app',
+        'X-Title': 'Yvexan ChatBot Platform',
+      },
+      body: JSON.stringify({
+        model: modelToUse,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
     });
-  }
-  
-  allChunks.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  
-  const selectedChunks: ContentChunk[] = [];
-  let usedTokens = 0;
-  const filesUsed = new Set<string>();
-  
-  for (const chunk of allChunks) {
-    if (usedTokens + chunk.tokens <= availableTokens) {
-      selectedChunks.push(chunk);
-      usedTokens += chunk.tokens;
-      filesUsed.add(chunk.filename);
+
+    if (!openRouterResponse.ok) {
+      const errorText = await openRouterResponse.text();
+      console.error(`OpenRouter error (${openRouterResponse.status}):`, errorText);
       
-      if (selectedChunks.length >= 15 && filesUsed.size >= 3) break;
-    }
-  }
-  
-  console.log(`Selected ${selectedChunks.length} chunks, ${usedTokens} tokens`);
-  
-  return {
-    chunks: selectedChunks,
-    totalTokens: usedTokens,
-    filesUsed: Array.from(filesUsed),
-    selectionStrategy: 'semantic-chunking'
-  };
-}
+      // Try fallback model if available
+      if (chatbot.fallback_models && chatbot.fallback_models.length > 0) {
+        const fallbackModel = chatbot.fallback_models[0];
+        console.log(`Trying fallback model: ${fallbackModel}`);
+        
+        const fallbackResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://yvexanchatbots.netlify.app',
+            'X-Title': 'Yvexan ChatBot Platform',
+          },
+          body: JSON.stringify({
+            model: fallbackModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: message }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+        });
 
-async function retrieveGeneralKnowledge(
-  files: KnowledgeFile[],
-  availableTokens: number
-): Promise<RetrievalResult> {
-  const selectedChunks: ContentChunk[] = [];
-  let usedTokens = 0;
-  const filesUsed = new Set<string>();
-  
-  // Prioritize instruction templates
-  const templates = files.filter(f => 
-    f.filename.toLowerCase().includes('guide') ||
-    f.filename.toLowerCase().includes('prompt')
-  ).slice(0, 1); // ONLY 1 template file
-  
-  for (const file of templates) {
-    if (!file.content) continue;
-    
-    const tokens = estimateTokens(file.content);
-    
-    if (usedTokens + tokens <= availableTokens) {
-      selectedChunks.push({
-        content: file.content,
-        filename: file.filename,
-        relevanceScore: 10,
-        tokens
-      });
-      usedTokens += tokens;
-      filesUsed.add(file.filename);
-    }
-  }
-  
-  // Add SHORT previews from factual files
-  const factual = files.filter(f => !templates.includes(f)).slice(0, 2);
-  
-  for (const file of factual) {
-    if (!file.content) continue;
-    
-    const preview = file.content.substring(0, 1500) + '\n[Preview only]';
-    const tokens = estimateTokens(preview);
-    
-    if (usedTokens + tokens <= availableTokens) {
-      selectedChunks.push({
-        content: preview,
-        filename: file.filename,
-        relevanceScore: 3,
-        tokens
-      });
-      usedTokens += tokens;
-      filesUsed.add(file.filename);
-    }
-  }
-  
-  console.log(`General: ${selectedChunks.length} chunks, ${usedTokens} tokens`);
-  
-  return {
-    chunks: selectedChunks,
-    totalTokens: usedTokens,
-    filesUsed: Array.from(filesUsed),
-    selectionStrategy: 'general-limited'
-  };
-}
+        if (!fallbackResponse.ok) {
+          return NextResponse.json(
+            { error: 'AI model unavailable' },
+            { status: 500, headers: corsHeaders }
+          );
+        }
 
-export function buildOptimizedPrompt(
-  basePrompt: string,
-  retrievalResult: RetrievalResult,
-  intent: IntentType
-): string {
-  let prompt = basePrompt || 'You are a helpful AI assistant.';
-  
-  if (retrievalResult.chunks.length > 0) {
-    prompt += '\n\n=== KNOWLEDGE BASE ===\n';
-    
-    const chunksByFile = new Map<string, ContentChunk[]>();
-    retrievalResult.chunks.forEach(chunk => {
-      if (!chunksByFile.has(chunk.filename)) {
-        chunksByFile.set(chunk.filename, []);
+        const fallbackData = await fallbackResponse.json();
+        const assistantMessage = fallbackData.choices[0].message.content;
+
+        // Log usage
+        await supabase.from('usage_logs').insert({
+          chatbot_id: chatbotId,
+          model: fallbackModel,
+          tokens_used: fallbackData.usage?.total_tokens || 0,
+          session_id: sessionId,
+        });
+
+        return NextResponse.json(
+          { 
+            message: assistantMessage,
+            model: fallbackModel,
+            tokensUsed: fallbackData.usage?.total_tokens || 0
+          },
+          { headers: corsHeaders }
+        );
       }
-      chunksByFile.get(chunk.filename)!.push(chunk);
-    });
-    
-    chunksByFile.forEach((chunks, filename) => {
-      prompt += `\n--- ${filename} ---\n`;
-      chunks.forEach(chunk => {
-        prompt += chunk.content + '\n\n';
+
+      return NextResponse.json(
+        { error: 'AI model error' },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    const data = await openRouterResponse.json();
+    const assistantMessage = data.choices[0].message.content;
+
+    console.log(`Response generated successfully`);
+    console.log(`Tokens used: ${data.usage?.total_tokens || 0}`);
+
+    // 8. Log usage
+    try {
+      await supabase.from('usage_logs').insert({
+        chatbot_id: chatbotId,
+        model: modelToUse,
+        tokens_used: data.usage?.total_tokens || 0,
+        session_id: sessionId,
       });
-    });
-    
-    prompt += '=== END KNOWLEDGE BASE ===\n\n';
+    } catch (logError) {
+      console.error('Error logging usage:', logError);
+    }
+
+    // 9. Extract leads if enabled
+    if (chatbot.data_capture_enabled) {
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+
+      const emails = message.match(emailRegex) || [];
+      const phones = message.match(phoneRegex) || [];
+
+      if (emails.length > 0 || phones.length > 0) {
+        try {
+          await supabase.from('leads').insert({
+            chatbot_id: chatbotId,
+            email: emails[0] || null,
+            phone: phones[0] || null,
+            message: message,
+            session_id: sessionId,
+          });
+          console.log('Lead captured:', { email: emails[0], phone: phones[0] });
+        } catch (leadError) {
+          console.error('Error capturing lead:', leadError);
+        }
+      }
+    }
+
+    console.log(`========== CHAT COMPLETE ==========\n`);
+
+    // 10. Return response
+    return NextResponse.json(
+      {
+        message: assistantMessage,
+        model: modelToUse,
+        tokensUsed: data.usage?.total_tokens || 0,
+      },
+      { headers: corsHeaders }
+    );
+
+  } catch (error) {
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500, headers: corsHeaders }
+    );
   }
-  
-  if (intent === 'hook_generation') {
-    prompt += 'Generate 5 viral hooks.\n';
-  } else if (intent === 'post_rewrite') {
-    prompt += 'Rewrite using the knowledge base.\n';
-  } else {
-    prompt += 'Provide detailed, accurate answers using the knowledge base.\n';
-  }
-  
-  return prompt;
 }
