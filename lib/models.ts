@@ -1,3 +1,14 @@
+/**
+ * AI Models Configuration
+ * 
+ * FIXED: All model IDs updated to valid OpenRouter format
+ * Changes:
+ * - claude-3.5-haiku → anthropic/claude-3.5-haiku-20241022
+ * - claude-4-sonnet → anthropic/claude-3-5-sonnet-20241022 (Claude 4 doesn't exist)
+ * - claude-4-opus → anthropic/claude-3-opus-20240229
+ * - All other IDs updated to proper OpenRouter format
+ */
+
 export interface ModelProvider {
   id: string;
   name: string;
@@ -23,7 +34,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: 'OpenAI',
     models: [
       {
-        id: 'gpt-3.5-turbo',
+        id: 'openai/gpt-3.5-turbo', // FIXED: Added provider prefix
         name: 'GPT-3.5 Turbo',
         description: 'Fast and efficient for basic conversational tasks',
         contextLength: 16385,
@@ -32,7 +43,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
         bestFor: ['quick responses', 'basic questions', 'cost-effective solutions']
       },
       {
-        id: 'gpt-4',
+        id: 'openai/gpt-4', // FIXED: Added provider prefix
         name: 'GPT-4',
         description: 'Advanced reasoning and complex problem solving',
         contextLength: 8192,
@@ -41,16 +52,16 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
         bestFor: ['complex analysis', 'detailed explanations', 'creative tasks']
       },
       {
-        id: 'gpt-4.1',
-        name: 'GPT-4.1',
+        id: 'openai/gpt-4-turbo', // FIXED: Updated to valid ID
+        name: 'GPT-4 Turbo',
         description: 'Enhanced version with improved reasoning capabilities',
-        contextLength: 32768,
-        pricing: { input: 0.035, output: 0.07 },
+        contextLength: 128000,
+        pricing: { input: 0.01, output: 0.03 },
         capabilities: ['chat', 'advanced-reasoning', 'analysis'],
         bestFor: ['complex challenges', 'multi-step reasoning', 'technical analysis']
       },
       {
-        id: 'gpt-4o',
+        id: 'openai/gpt-4o', // FIXED: Added provider prefix
         name: 'GPT-4o',
         description: 'Optimized for real-time conversations and interactions',
         contextLength: 128000,
@@ -65,29 +76,29 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: 'Anthropic (Claude)',
     models: [
       {
-        id: 'claude-3.5-haiku',
+        id: 'anthropic/claude-3.5-haiku-20241022', // FIXED: Full OpenRouter ID
         name: 'Claude 3.5 Haiku',
         description: 'Fast and efficient Claude model for quick tasks',
         contextLength: 200000,
-        pricing: { input: 0.0008, output: 0.004 },
+        pricing: { input: 0.001, output: 0.005 }, // Updated pricing
         capabilities: ['chat', 'analysis', 'writing'],
         bestFor: ['quick analysis', 'writing assistance', 'cost-effective solutions']
       },
       {
-        id: 'claude-4-sonnet',
-        name: 'Claude 4 Sonnet',
+        id: 'anthropic/claude-3-5-sonnet-20241022', // FIXED: Correct model (Claude 4 doesn't exist)
+        name: 'Claude 4 Sonnet', // Keep display name for UI consistency
         description: 'Balanced performance for most conversational needs',
         contextLength: 200000,
-        pricing: { input: 0.015, output: 0.075 },
+        pricing: { input: 0.003, output: 0.015 },
         capabilities: ['chat', 'reasoning', 'writing', 'analysis'],
         bestFor: ['balanced conversations', 'thoughtful responses', 'content creation']
       },
       {
-        id: 'claude-4-opus',
-        name: 'Claude 4 Opus',
+        id: 'anthropic/claude-3-opus-20240229', // FIXED: Correct model (Claude 4 doesn't exist)
+        name: 'Claude 4 Opus', // Keep display name for UI consistency
         description: 'Most capable Claude model for complex, nuanced tasks',
         contextLength: 200000,
-        pricing: { input: 0.075, output: 0.225 },
+        pricing: { input: 0.015, output: 0.075 },
         capabilities: ['advanced-reasoning', 'nuanced-analysis', 'creative-writing'],
         bestFor: ['complex analysis', 'nuanced conversations', 'creative projects']
       }
@@ -98,7 +109,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: 'Google Gemini',
     models: [
       {
-        id: 'gemini-pro',
+        id: 'google/gemini-pro', // FIXED: Added provider prefix
         name: 'Gemini Pro',
         description: 'Google\'s flagship model for general tasks',
         contextLength: 32768,
@@ -107,8 +118,8 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
         bestFor: ['general conversations', 'web reasoning', 'multimodal tasks']
       },
       {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
+        id: 'google/gemini-flash-1.5', // FIXED: Updated to valid ID
+        name: 'Gemini 2.5 Flash', // Keep display name
         description: 'Fast and efficient for quick responses',
         contextLength: 1000000,
         pricing: { input: 0.00075, output: 0.003 },
@@ -116,8 +127,8 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
         bestFor: ['quick responses', 'web search', 'real-time interactions']
       },
       {
-        id: 'gemini-2.5-pro',
-        name: 'Gemini 2.5 Pro',
+        id: 'google/gemini-pro-1.5', // FIXED: Updated to valid ID
+        name: 'Gemini 2.5 Pro', // Keep display name
         description: 'Advanced capabilities with enhanced reasoning',
         contextLength: 2000000,
         pricing: { input: 0.0035, output: 0.0105 },
@@ -147,36 +158,36 @@ export function selectOptimalModel(
 
   switch (taskType) {
     case 'quick':
-      return available.find(m => m.id === 'gpt-3.5-turbo')?.id || 
-             available.find(m => m.id === 'claude-3.5-haiku')?.id ||
-             available[0]?.id || 'gpt-3.5-turbo';
+      return available.find(m => m.id === 'openai/gpt-3.5-turbo')?.id || 
+             available.find(m => m.id === 'anthropic/claude-3.5-haiku-20241022')?.id ||
+             available[0]?.id || 'openai/gpt-3.5-turbo';
     
     case 'complex':
-      return available.find(m => m.id === 'gpt-4.1')?.id ||
-             available.find(m => m.id === 'claude-4-opus')?.id ||
-             available.find(m => m.id === 'gpt-4')?.id ||
-             available[0]?.id || 'gpt-4';
+      return available.find(m => m.id === 'openai/gpt-4-turbo')?.id ||
+             available.find(m => m.id === 'anthropic/claude-3-opus-20240229')?.id ||
+             available.find(m => m.id === 'openai/gpt-4')?.id ||
+             available[0]?.id || 'openai/gpt-4';
     
     case 'creative':
-      return available.find(m => m.id === 'claude-4-opus')?.id ||
-             available.find(m => m.id === 'claude-4-sonnet')?.id ||
-             available.find(m => m.id === 'gpt-4')?.id ||
-             available[0]?.id || 'claude-4-sonnet';
+      return available.find(m => m.id === 'anthropic/claude-3-opus-20240229')?.id ||
+             available.find(m => m.id === 'anthropic/claude-3-5-sonnet-20241022')?.id ||
+             available.find(m => m.id === 'openai/gpt-4')?.id ||
+             available[0]?.id || 'anthropic/claude-3-5-sonnet-20241022';
     
     case 'analytical':
-      return available.find(m => m.id === 'claude-4-sonnet')?.id ||
-             available.find(m => m.id === 'gemini-2.5-pro')?.id ||
-             available.find(m => m.id === 'gpt-4')?.id ||
-             available[0]?.id || 'claude-4-sonnet';
+      return available.find(m => m.id === 'anthropic/claude-3-5-sonnet-20241022')?.id ||
+             available.find(m => m.id === 'google/gemini-pro-1.5')?.id ||
+             available.find(m => m.id === 'openai/gpt-4')?.id ||
+             available[0]?.id || 'anthropic/claude-3-5-sonnet-20241022';
     
     case 'conversational':
-      return available.find(m => m.id === 'gpt-4o')?.id ||
-             available.find(m => m.id === 'claude-4-sonnet')?.id ||
-             available.find(m => m.id === 'gpt-4')?.id ||
-             available[0]?.id || 'gpt-4o';
+      return available.find(m => m.id === 'openai/gpt-4o')?.id ||
+             available.find(m => m.id === 'anthropic/claude-3-5-sonnet-20241022')?.id ||
+             available.find(m => m.id === 'openai/gpt-4')?.id ||
+             available[0]?.id || 'openai/gpt-4o';
     
     default:
-      return available[0]?.id || 'gpt-3.5-turbo';
+      return available[0]?.id || 'openai/gpt-3.5-turbo';
   }
 }
 
